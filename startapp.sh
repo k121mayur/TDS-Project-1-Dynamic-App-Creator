@@ -1,0 +1,1 @@
+# this is the bash file for starting venv install dependencies and start the app
