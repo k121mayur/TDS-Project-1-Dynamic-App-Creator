@@ -255,7 +255,8 @@ def orchestrate_task(payload: dict) -> None:
 
             callback = CallbackPayload(**callback_payload)
 
-            notify_payload = callback.dict(
+            notify_payload = jsonable_encoder(
+                callback,
                 exclude_none=True,
             )
 
