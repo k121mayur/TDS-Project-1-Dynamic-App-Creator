@@ -35,16 +35,17 @@ This service receives **task requests** at `POST /app`, immediately responds **2
 
 ```mermaid
 flowchart LR
-    Client-->FA["FastAPI /app (ACK 200 in ~5–50ms)"]
+    Client --> FA["FastAPI /app (ACK 200 in ~5-50ms)"]
     subgraph Async
-      FA--"enqueue"-->RQ[Redis (broker)]
-      RQ-->CW[Celery Worker(s)]
-      CW--"LLM or template → files"-->GH[(GitHub API)]
-      CW--"push repo + pages workflow"-->GH
-      GH--"build & deploy"-->GHP[GitHub Pages]
-      CW--"POST results"-->EV[Evaluation URL]
+      FA -- "enqueue" --> RQ[Redis (broker)]
+      RQ --> CW[Celery worker(s)]
+      CW -- "Generate static files" --> GH[(GitHub API)]
+      CW -- "Push repo + pages workflow" --> GH
+      GH -- "Build & deploy" --> GHP[GitHub Pages]
+      CW -- "POST results" --> EV[Evaluation URL]
     end
 ```
+
 - **FastAPI** exposes `POST /app` and **does not block**.  
 - **Celery + Redis** handle the heavy lifting: codegen, repository ops, and status polling.  
 - **GitHub Actions → Pages** hosts the generated static site.  
@@ -411,3 +412,4 @@ JSON
 curl -X POST http://127.0.0.1:8000/app   -H 'Content-Type: application/json'   -d @sample-request.json
 ```
 > You should get `{ "ok": true, ... }` immediately. Within 10 minutes, your `evaluation_url` will receive the callback with repo and pages details.
+
