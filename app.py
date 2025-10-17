@@ -1,51 +1,92 @@
-# This file will create the FASTAPI app
+"""FastAPI entrypoint for the LLM Code Deployment orchestrator."""
 
-# Here we will import all necessary modules
+from __future__ import annotations
 
+from datetime import datetime, timezone
+import logging
 
-# Here we will import the secrets from the config file
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 
+from config import Settings, get_settings
+from fastapi.encoders import jsonable_encoder
+from schemas import AckResponse, TaskRequest
+from tasks import orchestrate_task
 
-# Here we will create the FAST API instance 
+logger = logging.getLogger("orchestrator.api")
 
+app = FastAPI(
+    title="TDS LLM Code Deployment Orchestrator",
+    version="0.1.0",
+    description="Receives task briefs and asynchronously builds + deploys static web apps.",
+)
 
-# Here we will create the request to get the post request
-# This post request will take JSON input and will return the 200 status okay immidiately 
-# The input format as follows (DEMO) - Focus on the keys
-""" 
-{
-  // Student email ID
-  "email": "student@example.com",
-  // Student-provided secret
-  "secret": "...",
-  // A unique task ID.
-  "task": "captcha-solver-...",
-  // There will be multiple rounds per task. This is the round index
-  "round": 1,
-  // Pass this nonce back to the evaluation URL below
-  "nonce": "ab12-...",
-  // brief: mentions what the app needs to do
-  "brief": "Create a captcha solver that handles ?url=https://.../image.png. Default to attached sample.",
-  // checks: mention how it will be evaluated
-  "checks": [
-    "Repo has MIT license"
-    "README.md is professional",
-    "Page displays captcha URL passed at ?url=...",
-    "Page displays solved captcha text within 15 seconds",
-  ],
-  // Send repo & commit details to the URL below
-  "evaluation_url": "https://example.com/notify",
-  // Attachments will be encoded as data URIs
-  "attachments": [{ "name": "sample.png", "url": "data:image/png;base64,iVBORw..." }]
-}
-"""
-# After getting the input we validate the secret and if valid we will first respond with 200 status okay
-#After that the task will be started in the background 
-# We will take the brief and checks from the input and send it to the LLM to get the code in return 
-# Then we will create a new repository using Github Api and push the code to that repository 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["POST", "GET"],
+    allow_headers=["*"],
+)
 
 
+def validate_secret(task: TaskRequest, settings: Settings) -> None:
+    """
+    Ensure the incoming request secret matches the configured shared secret.
+
+    When ``settings.app_secret`` is not set or ``settings.dry_run`` is true, the
+    validation is skipped to allow local experimentation.
+    """
+
+    if settings.dry_run:
+        return
+
+    if not settings.app_secret:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Server secret not configured.",
+        )
+
+    if task.secret != settings.app_secret:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid secret provided.",
+        )
 
 
+@app.post("/app", response_model=AckResponse, status_code=status.HTTP_200_OK)
+def receive_task(
+    task_request: TaskRequest,
+    settings: Settings = Depends(get_settings),
+) -> AckResponse:
+    """
+    Accept a task brief, enqueue asynchronous orchestration, and respond immediately.
+    """
+
+    validate_secret(task_request, settings)
+
+    payload = jsonable_encoder(task_request)
+    payload["_received_at"] = datetime.now(timezone.utc).isoformat()
+    orchestrate_task.delay(payload)
+
+    logger.info(
+        "Task accepted",
+        extra={
+            "task": task_request.task,
+            "round": task_request.round,
+            "email": task_request.email,
+        },
+    )
+
+    return AckResponse(received_at=datetime.now(timezone.utc))
+
+
+@app.get("/healthz", tags=["health"])
+def health_check() -> dict[str, str]:
+    """Simple liveness check."""
+
+    return {"status": "ok"}
+
+
 
 

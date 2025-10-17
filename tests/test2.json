@@ -1,0 +1,18 @@
+{
+  "email": "21f1006961@ds.study.iitm.ac.in",
+  "secret": "ilovemycountry",
+  "task": "snake-ladder-game-demo",
+  "round": 1,
+  "nonce": "snake-demo-001",
+  "brief": "Build a browser-based Snake and Ladder game that supports two players, renders an interactive board, uses dice rolls to advance tokens, and announces the winner.",
+  "checks": [
+    "Repo has MIT license",
+    "README.md explains gameplay controls",
+    "Game renders a 10x10 Snake and Ladder board",
+    "Dice roll button updates the current player's position",
+    "Landing on a snake or ladder updates position correctly",
+    "Game declares a winner when a player reaches the final square"
+  ],
+  "evaluation_url": "https://www.siliconmango.com/eval",
+  "attachments": []
+}

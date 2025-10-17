@@ -1,0 +1,33 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environments
+.env
+.venv/
+venv/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Pytest cache
+.pytest_cache/
+
+# IDEs
+.idea/
+.vscode/
+
+# Local artifacts generated during dry-run mode
+artifacts/
+
+# Docker / Compose artefacts
+*.pyc
+*.pyo
+*.pyd
+*.swp
+*.swo
+
+# macOS
+.DS_Store

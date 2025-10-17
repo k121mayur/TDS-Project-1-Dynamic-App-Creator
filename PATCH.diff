@@ -1,0 +1,12 @@
+*** Begin Patch
+*** Update File: app.py
+@@
+-from config import Settings, get_settings
++from config import Settings, get_settings
++from fastapi.encoders import jsonable_encoder
+@@
+-    payload = task_request.dict()
++    payload = jsonable_encoder(task_request)
+     payload["_received_at"] = datetime.now(timezone.utc).isoformat()
+     orchestrate_task.delay(payload)
+*** End Patch
