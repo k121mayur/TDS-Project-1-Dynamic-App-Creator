@@ -33,19 +33,6 @@ This service receives **task requests** at `POST /app`, immediately responds **2
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    Client --> FA["FastAPI /app (ACK 200 in ~5-50ms)"]
-    subgraph Async
-      FA -- "enqueue" --> RQ[Redis (broker)]
-      RQ --> CW[Celery worker(s)]
-      CW -- "Generate static files" --> GH[(GitHub API)]
-      CW -- "Push repo + pages workflow" --> GH
-      GH -- "Build & deploy" --> GHP[GitHub Pages]
-      CW -- "POST results" --> EV[Evaluation URL]
-    end
-```
-
 - **FastAPI** exposes `POST /app` and **does not block**.  
 - **Celery + Redis** handle the heavy lifting: codegen, repository ops, and status polling.  
 - **GitHub Actions → Pages** hosts the generated static site.  
