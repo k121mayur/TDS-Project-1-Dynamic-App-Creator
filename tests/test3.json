@@ -1,0 +1,17 @@
+{
+  "email": "21f1006961@ds.study.iitm.ac.in",
+  "secret": "ilovemycountry",
+  "task": "snake-ladder-game-demo",
+  "round": 2,
+  "nonce": "snake-revise-002",
+  "brief": "Update the existing Snake and Ladder game to add a scoreboard that tracks total wins per player, allow entering player names before starting, and animate token movement.",
+  "checks": [
+    "Existing repo is updated (no new repo created)",
+    "README.md documents the new scoreboard and animations",
+    "Players can input their names before the game starts",
+    "Scoreboard persists and increments wins after each game",
+    "Token movement includes a simple animation when advancing"
+  ],
+  "evaluation_url": "https://www.siliconmango.com/eval",
+  "attachments": []
+}

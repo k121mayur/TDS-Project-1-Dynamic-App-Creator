@@ -20,6 +20,7 @@ This service receives **task requests** at `POST /app`, immediately responds **2
 - [Quick Start (Docker Compose)](#quick-start-docker-compose)
 - [Local Dev (without Docker)](#local-dev-without-docker)
 - [How It Works](#how-it-works)
+- [Revision Flow](#revision-flow)
 - [LLM Generation vs Deterministic Templates](#llm-generation-vs-deterministic-templates)
 - [GitHub Pages Workflow File](#github-pages-workflow-file)
 - [Logging & Monitoring](#logging--monitoring)
@@ -261,6 +262,17 @@ Or launch both services with the helper script (installs deps on first run):
    - Pushes the repo to GitHub (or `./artifacts/` in dry-run), enables Pages, and polls for readiness.
    - Posts the evaluation callback with repo metadata and Pages status.
 3. Structured logs capture each stage for observability.
+
+---
+
+## Revision Flow
+
+- **Round tracking:** Every successful build stores `{repo_name, owner, pages_url, last_commit, last_round}` in Redis keyed by `task`.
+- **Round 2+ requests:** The worker reloads that state, reuses the existing GitHub repository, and applies the new brief on the saved branch instead of creating a new repo.
+- **Deployment:** Updated assets overwrite previous versions and trigger the Pages workflow automatically.
+- **Callback:** The evaluation POST mirrors round-specific metadata (including the new `round`/`nonce`) within the 10-minute SLO.
+
+State entries are overwritten after each successful deployment, so the latest repo metadata is always available for future revise calls.
 
 ---
 

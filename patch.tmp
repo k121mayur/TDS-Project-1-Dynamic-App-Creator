@@ -1,0 +1,28 @@
+*** Begin Patch
+*** Update File: tasks.py
+@@
+             else:
+                 repo_info = _persist_local_repo(files_to_publish, repo_name, owner)
+                 pages_url = repo_info.pages_url or pages_url
+                 pages_status = "dry-run"
+ 
++            persisted_state = {
++                "task": task_request.task,
++                "round": task_request.round,
++                "nonce": task_request.nonce,
++                "repo_name": repo_info.name,
++                "owner": repo_info.owner,
++                "pages_url": pages_url,
++                "default_branch": repo_info.default_branch,
++                "last_commit": commit_sha,
++                "pages_status": pages_status,
++                "updated_at": datetime.now(timezone.utc).isoformat(),
++            }
++            _store_task_state(task_request.task, persisted_state)
++
+             callback_payload = {
+                 "email": task_request.email,
+                 "task": task_request.task,
+                 "round": task_request.round,
+                 "nonce": task_request.nonce,
+*** End Patch

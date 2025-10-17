@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from fastapi.encoders import jsonable_encoder
 import logging
 import time
 from datetime import datetime, timezone
@@ -13,7 +12,9 @@ from typing import Dict, Optional
 from uuid import uuid4
 
 import httpx
+import redis
 from celery import Celery
+from fastapi.encoders import jsonable_encoder
 
 from codegen import (
     generate_static_site,
@@ -31,6 +32,52 @@ settings: Settings = get_settings()
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
 logger = logging.getLogger("orchestrator.worker")
+
+STATE_KEY_PREFIX = "orchestrator:task:"
+_state_client: Optional[redis.Redis] = None
+
+
+def _get_state_client() -> Optional[redis.Redis]:
+    global _state_client  # noqa: PLW0603
+
+    if _state_client is not None:
+        return _state_client
+
+    try:
+        _state_client = redis.Redis.from_url(
+            settings.redis_url,
+            decode_responses=True,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Unable to initialise state client: %s", exc)
+        _state_client = None
+    return _state_client
+
+
+def _load_task_state(task_id: str) -> dict:
+    client = _get_state_client()
+    if client is None:
+        return {}
+
+    try:
+        raw = client.get(f"{STATE_KEY_PREFIX}{task_id}")
+        if not raw:
+            return {}
+        return json.loads(raw)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Unable to load state for %s: %s", task_id, exc)
+        return {}
+
+
+def _store_task_state(task_id: str, data: dict) -> None:
+    client = _get_state_client()
+    if client is None:
+        return
+
+    try:
+        client.set(f"{STATE_KEY_PREFIX}{task_id}", json.dumps(data))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Unable to persist state for %s: %s", task_id, exc)
 
 
 celery_app = Celery(
@@ -93,19 +140,37 @@ def orchestrate_task(payload: dict) -> None:
 
     task_payload = {k: v for k, v in payload.items() if not k.startswith("_")}
     task_request = TaskRequest(**task_payload)
-    logger.info("Worker received task %s", task_request.task)
+    logger.info("Worker received task %s (round %s)", task_request.task, task_request.round)
 
-    repo_name = _compose_repo_name(task_request)
-    owner = settings.github_owner or "example"
+    task_state = _load_task_state(task_request.task)
+
+    repo_name = task_state.get("repo_name") or _compose_repo_name(task_request)
+    owner = task_state.get("owner") or settings.github_owner or "example"
     github_service: Optional[GitHubService] = None
+
+    if task_state.get("repo_name"):
+        logger.info(
+            "Reusing repository %s/%s from stored state (last round %s)",
+            owner,
+            repo_name,
+            task_state.get("round", "?"),
+        )
 
     if not settings.dry_run and settings.github_token:
         try:
             github_service = GitHubService(settings)
-            owner = settings.github_owner or github_service.login
+            if not task_state.get("owner"):
+                owner = settings.github_owner or github_service.login
         except GitHubServiceError as exc:
             logger.error("GitHub configuration error: %s", exc)
             return
+
+    logger.info(
+        "Using repository %s/%s for task %s",
+        owner,
+        repo_name,
+        task_request.task,
+    )
 
     pages_url = build_pages_url(owner, repo_name)
 
@@ -242,6 +307,20 @@ def orchestrate_task(payload: dict) -> None:
                 pages_url = repo_info.pages_url or pages_url
                 pages_status = "dry-run"
 
+            persisted_state = {
+                "task": task_request.task,
+                "round": task_request.round,
+                "nonce": task_request.nonce,
+                "repo_name": repo_info.name,
+                "owner": repo_info.owner,
+                "pages_url": pages_url,
+                "default_branch": repo_info.default_branch,
+                "last_commit": commit_sha,
+                "pages_status": pages_status,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+            _store_task_state(task_request.task, persisted_state)
+
             callback_payload = {
                 "email": task_request.email,
                 "task": task_request.task,
@@ -295,8 +374,10 @@ def orchestrate_task(payload: dict) -> None:
                 )
     except Exception as exc:  # noqa: BLE001
         logger.exception("Unhandled error while processing task: %s", exc)
-
-
+
+
+
+
 
 
 
